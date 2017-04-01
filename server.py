@@ -114,14 +114,20 @@ def add_class():
     i=1
     teacher = request.args.get("teacher")
     new_class_name = request.args.get("new_class_name")
+    teacher = teacher.encode('ascii','ignore')
+    new_class_name = new_class_name.encode('ascii','ignore')
+    with open("users.csv",'rb') as f:
+        reader = csv.reader(f)
+        users = {rows[0]:rows[1:] for rows in reader}
+        if teacher in users:
+            if users[teacher][1] != "t":
+                return "Username not a teacher!"
     with open("classes.csv",'rb') as f:
         reader = csv.reader(f)
         classes = {rows[0]:rows[1:] for rows in reader}
         if new_class_name not in classes.values():
             while True:
                 if str(i) not in classes:
-                    teacher = teacher.encode('ascii','ignore')
-                    new_class_name = new_class_name.encode('ascii','ignore')
                     create_class(teacher,new_class_name,i)
                     return "GOOD"
                     break
