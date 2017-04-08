@@ -3,6 +3,7 @@ app = Flask(__name__)
 from functools import wraps
 from flask import request, Response
 import csv
+import base64
 """set FLASK_APP=server.py"""
 users = {}
 classes = {}
@@ -138,6 +139,26 @@ def add_class():
 @requires_auth
 def login():
     return "Logged In"
+
+@app.route('/register')
+def register():
+    username = request.args.get('username')
+    password = request.args.get('password')
+    permission = request.args.get('permission')
+    password = base64.b64decode(password)
+    f = open("users.csv",'rb')
+    reader = csv.reader(f)
+    users = {rows[0]:rows[1:] for rows in reader}
+    if username not in users:
+        users[username] = [password,permission]
+        with open('users.csv', 'wb') as csv_file:
+            writer = csv.writer(csv_file)
+            for key, value in users.items():
+                writer.writerow([key, value[0],value[1]])
+        return "GOOD"
+    print users
+    f.close()
+    return "ERROR"
 
 if __name__ == "__main__":
     app.run()
