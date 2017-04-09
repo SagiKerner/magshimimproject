@@ -3,6 +3,7 @@ app = Flask(__name__)
 from functools import wraps
 from flask import request, Response
 import csv
+import os
 import base64
 """set FLASK_APP=server.py"""
 users = {}
@@ -49,6 +50,22 @@ def create_class(teacher,class_name,id):
             writer.writerow([key, value[0],value[1]])
 	new_class = open(str(id)+".scv","wb")
 	new_class.close()
+
+def class_delete(class_id):
+    with open("classes.csv",'rb') as f:
+        reader = csv.reader(f)
+        classes = {rows[0]:rows[1:] for rows in reader}
+    classes.pop(class_id)
+    with open('classes.csv', 'wb') as csv_file:
+            writer = csv.writer(csv_file)
+            for key, value in classes.items():
+                writer.writerow([key, value[0],value[1]])
+    try:
+        os.remove('D:\\Users\\user-pc\\Desktop\\Python server\\'+class_id+".csv")
+    except:
+        print "oops"
+        return False
+    return True
 
 def check_auth(username, password):
     """This function is called to check if a username /
@@ -133,6 +150,29 @@ def add_class():
                     return "GOOD"
                     break
                 i=i+1
+    return "ERROR"
+
+@app.route("/delete_class")
+@requires_auth
+def delete_class():
+    teacher = request.args.get("teacher")
+    class_name = request.args.get("class_name")
+    teacher = teacher.encode('ascii','ignore')
+    class_name = class_name.encode('ascii','ignore')
+    with open("users.csv",'rb') as f:
+        reader = csv.reader(f)
+        users = {rows[0]:rows[1:] for rows in reader}
+        if teacher in users:
+            if users[teacher][1] != "t":
+                return "Username not a teacher!"
+    with open("classes.csv",'rb') as f:
+        reader = csv.reader(f)
+        classes = {rows[0]:rows[1:] for rows in reader}
+        for class_id,names in classes.iteritems():
+            if names[0] == class_name and names[1] == teacher: #if class exists and teacher is correct
+                if class_delete(class_id):
+                    return "GOOD"
+                break
     return "ERROR"
 
 @app.route('/login')
