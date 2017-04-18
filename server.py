@@ -5,18 +5,27 @@ from flask import request, Response
 import csv
 import os
 import base64
+import json
+import gpxpy.geo
 """set FLASK_APP=server.py"""
 users = {}
 classes = {}
 
 def add_to_class(class_id,username):
+    i=0
     with open("users.csv",'rb') as f:
        reader = csv.reader(f)
        users = {rows[0]:rows[1:] for rows in reader}
     if username in users:
         if users[username][1] == "s":
-            with open(class_id+".csv",'ab') as f:
-                f.write(username+"\n") 
+            with open(class_id+'.csv', 'rb') as csv_file:
+                l = csv_file.readlines()
+            l = map(lambda s: s.strip(),l)
+            if username not in l:
+                l.append(username)
+                with open(class_id+'.csv', 'wb') as csv_file:
+                    for x in l:
+                        csv_file.write(x+"\n")
                 return True
     return False
 
@@ -48,7 +57,7 @@ def create_class(teacher,class_name,id):
         writer = csv.writer(csv_file)
         for key, value in classes.items():
             writer.writerow([key, value[0],value[1]])
-	new_class = open(str(id)+".scv","wb")
+	new_class = open(str(id)+".csv","wb")
 	new_class.close()
 
 def class_delete(class_id):
@@ -57,9 +66,9 @@ def class_delete(class_id):
         classes = {rows[0]:rows[1:] for rows in reader}
     classes.pop(class_id)
     with open('classes.csv', 'wb') as csv_file:
-            writer = csv.writer(csv_file)
-            for key, value in classes.items():
-                writer.writerow([key, value[0],value[1]])
+        writer = csv.writer(csv_file)
+        for key, value in classes.items():
+            writer.writerow([key, value[0],value[1]])
     try:
         os.remove('D:\\Users\\user-pc\\Desktop\\Python server\\'+class_id+".csv")
     except:
@@ -100,30 +109,96 @@ def requires_auth(f):
 def hello():
     return "WELCOME!    to login: /login    to join a class: /join_class"
 
+@app.route("/send_location")
+def location():
+    username = request.args.get("username")
+    class_name = request.args.get("class_name")
+    latitude = request.args.get("latitude")
+    longitude = request.args.get("longitude")
+    print latitude , longitude
+    with open("classes.csv",'rb') as f:
+        reader = csv.reader(f)
+        classes = {rows[0]:rows[1:] for rows in reader}
+    for id,names in classes.iteritems():
+        if names[0] == class_name: #check if class exists
+            with open(id+"class_presence.csv","ab+") as file:
+                writer = csv.writer(file)
+                writer.writerow([username,latitude,longitude])
+            return "GOOD"
+    return "ERROR"
+
+@app.route("/check_presence")
+def check_presence():
+    username = request.args.get("username")
+    class_name = request.args.get("class_name")
+    latitude = request.args.get("latitude")
+    longitude = request.args.get("longitude")
+    with open("classes.csv",'rb') as f:
+        reader = csv.reader(f)
+        classes = {rows[0]:rows[1:] for rows in reader}
+    for id,names in classes.iteritems():
+        if names[0] == class_name: #check if class exists
+            try:
+                class_presence = open(id+"class_presence.csv","rb")
+                class_presence.close()
+            except:
+                return "ERROR"
+            else:
+                userlist = []
+                dist = {}
+                with open(id+"class_presence.csv","rb") as f:
+                    reader = csv.reader(f)
+                    presence = {rows[0]:rows[1:] for rows in reader}
+                for username,latlon in presence.items():
+                    print float(latitude), float(longitude), float(latlon[0]), float(latlon[1])
+                    dist[username] = gpxpy.geo.haversine_distance(float(latitude), float(longitude), float(latlon[0]), float(latlon[1]))
+                print dist
+                for user,d in dist.iteritems():
+                    if d > 1:
+                        userlist.append(user)
+                print userlist
+                try:
+                    os.remove('D:\Users\user-pc\Desktop\Python server\\'+id+"class_presence.csv")
+                except:
+                    print "oops"
+                else:
+                    response = app.response_class(
+                    response = json.dumps(userlist),
+                    status = 200,
+                    mimetype='application/json'
+                    )
+                    print response,json.dumps(userlist)
+                    return response
+    return "ERROR"
+
 @app.route("/join_class")
 @requires_auth
 def join_class():
-    class_id = request.args.get("class_id")
+    class_name = request.args.get("class_name")
     username = request.args.get("username")
     with open("classes.csv",'rb') as f:
         reader = csv.reader(f)
         classes = {rows[0]:rows[1:] for rows in reader}
-    if class_id in classes:
-        if add_to_class(class_id,username)==True:
-            return "GOOD"
+    for id,names in classes.iteritems():
+        if names[0] == class_name:
+            if add_to_class(id,username):
+                return "GOOD"
+                break
     return "ERROR"
 
 @app.route("/quit_class")
 @requires_auth
 def quit_class():
-    class_id = request.args.get("class_id")
+    class_name = request.args.get("class_name")
     username = request.args.get("username")
     with open("classes.csv",'rb') as f:
         reader = csv.reader(f)
         classes = {rows[0]:rows[1:] for rows in reader}
-    if class_id in classes:
-        if remove_from_class(class_id,username):
-            return "GOOD"
+    for id,names in classes.iteritems():
+        if names[0] == class_name:
+            if remove_from_class(id,username):
+                return "GOOD"
+                break
     return "ERROR"
 
 @app.route("/add_class")
@@ -196,9 +271,8 @@ def register():
             for key, value in users.items():
                 writer.writerow([key, value[0],value[1]])
         return "GOOD"
-    print users
     f.close()
-    return "ERROR"
+    return Response(401)
 
 if __name__ == "__main__":
     app.run()
